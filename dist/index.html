@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="Mobile roleplay chat client for your Hugging Face Space." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="deepRP" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="preload" href="assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
+  <script>
+    (() => {
+      const saved = localStorage.getItem("stheno_theme");
+      const theme = saved === "light" || saved === "dark"
+        ? saved
+        : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+      document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#171416" : "#ffffff";
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css" />
+  <title>deepRP</title>
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <button type="button" class="icon-btn" id="chats-btn" aria-label="Chat history">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <div class="header-left">
+        <h1 class="app-title">deepRP</h1>
+        <div class="status-badge" id="status-badge" data-state="disconnected">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span class="status-text" id="status-text">Disconnected</span>
+        </div>
+      </div>
+      <button type="button" class="icon-btn theme-toggle" id="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false">
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
+        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="settings-btn" aria-label="Open settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.12.36.37.67.7.87.3.18.65.27 1 .27H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51.86Z"/></svg>
+      </button>
+    </header>
+
+    <main class="chat" id="chat" role="log" aria-live="polite"></main>
+
+    <footer class="composer">
+      <div class="composer-inner">
+        <textarea id="message-input" rows="1" placeholder="Message Stheno…" enterkeyhint="send" aria-label="Message"></textarea>
+        <button type="button" class="send-btn" id="send-btn" aria-label="Send message" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <div class="backdrop" id="settings-backdrop" hidden></div>
+  <section class="settings-panel" id="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-hidden="true">
+    <div class="settings-head">
+      <h2 id="settings-title">Settings</h2>
+      <button type="button" class="icon-btn" id="settings-close" aria-label="Close settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+
+    <label class="field">
+      <span class="field-label">Hugging Face Token</span>
+      <div class="token-row">
+        <input type="password" id="token-input" placeholder="hf_…" autocomplete="off" spellcheck="false" />
+        <button type="button" class="icon-btn" id="token-toggle" aria-label="Show token" aria-pressed="false">
+          <svg id="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg id="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
+        </button>
+      </div>
+      <span class="field-hint">Create a token at hf.co/settings/tokens — it needs “Read” access to the Space.</span>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Space ID</span>
+      <input type="text" id="space-input" placeholder="deepstrike87/RPO" spellcheck="false" />
+    </label>
+
+    <label class="field">
+      <span class="field-label">System Prompt / Character Bible</span>
+      <textarea id="persona-input" rows="7" spellcheck="false"></textarea>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Context Messages Sent to Model</span>
+      <input type="number" id="context-input" min="0" max="50" step="1" />
+      <span class="field-hint">How many recent messages Stheno sees each turn (0 = none). Long-term facts belong in memory below.</span>
+    </label>
+
+    <label class="field">
+      <span class="field-label">World Notes (Always Remembered)</span>
+      <textarea id="world-notes-input" rows="3" placeholder="World rules, locations, ongoing facts…" spellcheck="false"></textarea>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Current Chat Memory</span>
+      <textarea id="chat-memory-input" rows="4" placeholder="Story summary for the active chat…" spellcheck="false"></textarea>
+      <span class="field-hint">Injected into every turn of this chat. Edit freely or generate it from the conversation (one model call).</span>
+    </label>
+
+    <button type="button" class="btn" id="summarize-btn">Summarize story into memory</button>
+
+    <button type="button" class="btn btn-danger" id="clear-chat-btn">Clear Current Chat</button>
+
+    <div class="settings-foot">
+      <button type="button" class="btn" id="settings-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="settings-save">Save</button>
+    </div>
+  </section>
+
+  <div class="backdrop" id="chats-backdrop" hidden></div>
+  <aside class="chats-panel" id="chats-panel" aria-label="Chat history" aria-hidden="true">
+    <div class="chats-head">
+      <h2>Chats</h2>
+      <button type="button" class="icon-btn" id="chats-close" aria-label="Close chat history">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <button type="button" class="btn btn-primary new-chat-btn" id="new-chat-btn">+ New chat</button>
+    <div class="chat-list" id="chat-list"></div>
+    <div class="chats-foot">
+      <button type="button" class="btn" id="export-btn">Export backup</button>
+      <button type="button" class="btn" id="import-btn">Import</button>
+      <input type="file" id="import-file" accept="application/json,.json" hidden />
+    </div>
+  </aside>
+
+  <noscript><p class="noscript-msg">deepRP needs JavaScript to run.</p></noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
