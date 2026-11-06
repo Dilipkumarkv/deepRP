@@ -1,4 +1,4 @@
-const CACHE_NAME = "stheno-rp-v7";
+const CACHE_NAME = "stheno-rp-v8";
 
 const APP_SHELL = [
   "./",

@@ -16,6 +16,14 @@ import {
   buildSummaryRequest,
   exportBackup,
   importBackup,
+  exportCurrentChat,
+  filterChatsByTag,
+  bulkSelectChat,
+  bulkGetSelected,
+  bulkDeselectAll,
+  bulkDeleteSelected,
+  bulkToggleTagSelected,
+  MAX_TRANSCRIPT_CHARS,
 } from "./chats.js";
 
 /* ---------- DOM refs ---------- */
@@ -55,6 +63,21 @@ const els = {
   exportBtn: $("export-btn"),
   importBtn: $("import-btn"),
   importFile: $("import-file"),
+  contextVisualizer: $("context-visualizer"),
+  contextCurrent: $("context-current"),
+  contextProgress: $("context-progress"),
+  tempInput: $("temp-input"),
+  toppInput: $("topp-input"),
+  maxtokensInput: $("maxtokens-input"),
+  promptLibrary: $("prompt-library"),
+  promptList: $("prompt-list"),
+  promptAddBtn: $("prompt-add-btn"),
+  searchInput: $("chat-search"),
+  tagFilter: $("tag-filter"),
+  exportCurrentBtn: $("export-current-btn"),
+  presetList: $("preset-list"),
+  presetAddBtn: $("preset-add-btn"),
+  presetApplyAllBtn: $("preset-apply-all-btn"),
 };
 
 /* ---------- constants ---------- */
@@ -66,6 +89,9 @@ const LS_KEYS = {
   contextCount: "stheno_context_count",
   worldNotes: "stheno_world_notes",
   theme: "stheno_theme",
+  temperature: "stheno_temperature",
+  topP: "stheno_top_p",
+  maxTokens: "stheno_max_tokens",
 };
 
 const DEFAULT_SPACE = "deepstrike87/RPO";
@@ -94,6 +120,9 @@ const settings = {
   persona: localStorage.getItem(LS_KEYS.persona) || DEFAULT_PERSONA,
   contextCount: Number(localStorage.getItem(LS_KEYS.contextCount) ?? 20),
   worldNotes: localStorage.getItem(LS_KEYS.worldNotes) || "",
+  temperature: Number(localStorage.getItem(LS_KEYS.temperature) ?? 0.7),
+  topP: Number(localStorage.getItem(LS_KEYS.topP) ?? 0.9),
+  maxTokens: Number(localStorage.getItem(LS_KEYS.maxTokens) ?? 512),
 };
 
 const chatState = loadChats();
@@ -143,10 +172,44 @@ function scrollToBottom() {
   });
 }
 
-function renderMessage(role, text, { error = false } = {}) {
+function renderMessage(role, text, { error = false, actions = false } = {}) {
   const el = document.createElement("div");
   el.className = `msg msg-${role}${error ? " error" : ""}`;
   el.textContent = text;
+  if (actions) {
+    const actionsEl = document.createElement("div");
+    actionsEl.className = "msg-actions";
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "mini-btn";
+    copyBtn.setAttribute("aria-label", "Copy message");
+    copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(text).then(() => {
+        addSystemMessage("Message copied to clipboard.");
+      }).catch(() => {
+        addSystemMessage("Failed to copy message.", true);
+      });
+    });
+    const thumbsUp = document.createElement("button");
+    thumbsUp.type = "button";
+    thumbsUp.className = "mini-btn thumb-btn up";
+    thumbsUp.setAttribute("aria-label", "Thumbs up");
+    thumbsUp.setAttribute("aria-pressed", "false");
+    thumbsUp.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
+    thumbsUp.addEventListener("click", () => toggleFeedback(thumbsUp, "up", text));
+    const thumbsDown = document.createElement("button");
+    thumbsDown.type = "button";
+    thumbsDown.className = "mini-btn thumb-btn down";
+    thumbsDown.setAttribute("aria-label", "Thumbs down");
+    thumbsDown.setAttribute("aria-pressed", "false");
+    thumbsDown.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>';
+    thumbsDown.addEventListener("click", () => toggleFeedback(thumbsDown, "down", text));
+    actionsEl.append(copyBtn, thumbsUp, thumbsDown);
+    const saved = storedFeedback(text);
+    if (saved === "up" || saved === "down") markFeedback(thumbsUp, thumbsDown, saved);
+    el.appendChild(actionsEl);
+  }
   els.chat.appendChild(el);
   scrollToBottom();
   return el;
@@ -166,14 +229,84 @@ function renderActiveChat() {
   } else if (!chat.messages.length) {
     addSystemMessage("New chat — set the scene with your first message.");
   } else {
-    for (const m of chat.messages) renderMessage(m.role, m.text);
+    for (const m of chat.messages) renderMessage(m.role, m.text, { actions: m.role === "bot" });
+  }
+  // Show memory summary hint if chat is long and has no summary
+  if (chat && chat.messages.length >= 30 && !chat.memorySummary.trim()) {
+    const hint = document.createElement("div");
+    hint.className = "msg-system";
+    hint.textContent = "Tip: This chat has many messages. Use the Summarize button in Settings to create a memory summary.";
+    els.chat.appendChild(hint);
   }
   scrollToBottom();
+  updateContextVisualizer();
+}
+
+function updateContextVisualizer() {
+  const chat = activeChat(chatState);
+  if (!chat || !settings.token) {
+    els.contextVisualizer.hidden = true;
+    return;
+  }
+  els.contextVisualizer.hidden = false;
+  // Count recent message characters (same logic as buildMessagePayload)
+  const count = Math.max(0, Math.min(50, Number(settings.contextCount) || 0));
+  const recent = chat.messages.slice(-count);
+  let transcript = recent.map((m) => `${m.role === "user" ? "User" : "Stheno"}: ${m.text}`).join("\n\n");
+  let used = transcript.length;
+  const total = MAX_TRANSCRIPT_CHARS;
+  const percent = Math.round((used / total) * 100);
+  els.contextCurrent.textContent = `${used} / ${total} chars (${percent}%)`;
+  els.contextProgress.value = Math.max(0, Math.min(100, percent));
+  // Add warning classes
+  els.contextVisualizer.classList.remove("warn", "danger");
+  if (percent >= 80) {
+    els.contextVisualizer.classList.add("warn");
+  }
+  if (percent >= 95) {
+    els.contextVisualizer.classList.add("danger");
+  }
+}
+
+
+
+function feedbackStore() {
+  const chat = activeChat(chatState);
+  if (!chat) return null;
+  const key = `stheno_feedback_${chat.id}`;
+  return { key, data: JSON.parse(localStorage.getItem(key) || "{}") };
+}
+
+function storedFeedback(text) {
+  const store = feedbackStore();
+  return store ? store.data[text] ?? null : null;
+}
+
+function markFeedback(upBtn, downBtn, direction) {
+  upBtn.classList.toggle("is-up", direction === "up");
+  downBtn.classList.toggle("is-down", direction === "down");
+  upBtn.setAttribute("aria-pressed", String(direction === "up"));
+  downBtn.setAttribute("aria-pressed", String(direction === "down"));
+}
+
+function toggleFeedback(button, direction, text) {
+  const bubble = button.closest(".msg");
+  const upBtn = bubble.querySelector(".thumb-btn.up");
+  const downBtn = bubble.querySelector(".thumb-btn.down");
+  const next = storedFeedback(text) === direction ? null : direction;
+  markFeedback(upBtn, downBtn, next);
+  const store = feedbackStore();
+  if (!store) return;
+  if (next) store.data[text] = next;
+  else delete store.data[text];
+  localStorage.setItem(store.key, JSON.stringify(store.data));
+  addSystemMessage(next ? `Feedback recorded: ${next}` : "Feedback cleared.");
 }
 
 function storeMessage(chat, role, text) {
   addChatMessage(chatState, chat, role, text);
   refreshChatList();
+  updateContextVisualizer();
 }
 
 function showTyping() {
@@ -254,19 +387,41 @@ function describeError(err) {
   return `Error: ${raw}`;
 }
 
-async function predictReply(message, systemPrompt) {
+async function predictReply(message, systemPrompt, temperature, topP, maxTokens) {
   const c = await ensureClient();
   if (!c) throw new Error("No Hugging Face token set.");
-  const result = await withTimeout(
-    c.predict(ENDPOINT, [message, systemPrompt]),
-    REQUEST_TIMEOUT_MS,
-    "Request timed out"
-  );
-  const reply = Array.isArray(result?.data) ? result.data[0] : null;
-  if (typeof reply !== "string" || !reply.trim()) {
-    throw new Error("The model returned an empty reply — try again.");
+
+  let attempt = 0;
+  const maxAttempts = 3;
+  const baseDelay = 1000; // 1 second
+
+  while (attempt < maxAttempts) {
+    try {
+      const result = await withTimeout(
+        c.predict(ENDPOINT, [message, systemPrompt]),
+        REQUEST_TIMEOUT_MS,
+        "Request timed out"
+      );
+      const reply = Array.isArray(result?.data) ? result.data[0] : null;
+      if (typeof reply !== "string" || !reply.trim()) {
+        throw new Error("The model returned an empty reply — try again.");
+      }
+      return reply;
+    } catch (err) {
+      attempt++;
+      if (attempt >= maxAttempts) {
+        throw err; // Re-throw the last error
+      }
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      // If it's a network error, reset the client connection
+      if (/network|fetch|connection|abort/i.test(err.message || err)) {
+        client = null;
+        connectedSpace = null;
+      }
+    }
   }
-  return reply;
 }
 
 /* ---------- sending ---------- */
@@ -285,6 +440,9 @@ async function sendMessage() {
   // Payload is built before storing the new message so it isn't duplicated in the transcript
   const payload = buildMessagePayload(chat, text, settings.contextCount);
   const systemPrompt = buildSystemPrompt(settings.persona, settings.worldNotes, chat);
+  const temperature = settings.temperature;
+  const topP = settings.topP;
+  const maxTokens = settings.maxTokens;
 
   storeMessage(chat, "user", text);
   renderMessage("user", text);
@@ -297,10 +455,10 @@ async function sendMessage() {
   showTyping();
 
   try {
-    const reply = await predictReply(payload, systemPrompt);
+    const reply = await predictReply(payload, systemPrompt, temperature, topP, maxTokens);
     hideTyping();
     storeMessage(chat, "bot", reply);
-    if (chatState.activeId === chat.id) renderMessage("bot", reply);
+    if (chatState.activeId === chat.id) renderMessage("bot", reply, { actions: true });
     setStatus("ready", "Ready");
   } catch (err) {
     hideTyping();
@@ -388,6 +546,7 @@ els.send.addEventListener("click", sendMessage);
 /* ---------- chats drawer ---------- */
 
 function openChats() {
+  populateTagFilter();
   refreshChatList();
   els.chatsBackdrop.hidden = false;
   els.chatsPanel.classList.add("open");
@@ -405,24 +564,62 @@ const ICONS = {
   delete: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
 };
 
+function populateTagFilter() {
+  if (!els.tagFilter) return;
+  const current = els.tagFilter.value || "";
+  const tags = [...new Set(chatState.chats.flatMap((c) => c.tags || []))].sort((a, b) =>
+    a.localeCompare(b)
+  );
+  els.tagFilter.innerHTML = "";
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = "All chats";
+  els.tagFilter.appendChild(all);
+  for (const tag of tags) {
+    const opt = document.createElement("option");
+    opt.value = tag;
+    opt.textContent = `#${tag}`;
+    els.tagFilter.appendChild(opt);
+  }
+  els.tagFilter.value = tags.includes(current) ? current : "";
+}
+
+function setupChatSearch() {
+  els.searchInput?.addEventListener("input", refreshChatList);
+  els.tagFilter?.addEventListener("change", refreshChatList);
+}
+
 function refreshChatList() {
   els.chatList.innerHTML = "";
-  if (!chatState.chats.length) {
+  const searchTerm = els.searchInput ? (els.searchInput.value || "").toLowerCase() : "";
+  const tagFilter = els.tagFilter ? (els.tagFilter.value || "") : "";
+  let filteredChats = tagFilter ? filterChatsByTag(chatState, tagFilter) : chatState.chats;
+  if (searchTerm) {
+    filteredChats = filteredChats.filter((c) => c.title.toLowerCase().includes(searchTerm));
+  }
+  const selectedChats = bulkGetSelected(chatState);
+  if (selectedChats.length) els.chatList.appendChild(buildBulkBar(selectedChats.length));
+  if (!filteredChats.length) {
     const empty = document.createElement("p");
     empty.className = "chat-list-empty";
-    empty.textContent = "No chats yet — start a new one.";
+    empty.textContent = searchTerm
+      ? `No chats match “${els.searchInput?.value || ""}” with tag “${tagFilter || "all"}”.`
+      : "No chats yet — start a new one.";
     els.chatList.appendChild(empty);
     return;
   }
-  for (const chat of chatState.chats) {
+  for (const chat of filteredChats) {
+    const isSelected = selectedChats.some((c) => c.id === chat.id);
     const item = document.createElement("div");
-    item.className = `chat-item${chat.id === chatState.activeId ? " active" : ""}`;
+    item.className = `chat-item${chat.id === chatState.activeId ? " active" : ""}${isSelected ? " selected" : ""}`;
 
     const main = document.createElement("button");
     main.type = "button";
     main.className = "chat-item-main";
     const title = document.createElement("span");
     title.className = "chat-item-title";
+    // Apply strikethrough for selected chats
+    if (isSelected) title.style.textDecoration = "line-through";
     title.textContent = chat.title;
     const meta = document.createElement("span");
     meta.className = "chat-item-meta";
@@ -434,6 +631,19 @@ function refreshChatList() {
       dot.title = "Has story memory";
       meta.appendChild(dot);
     }
+    // Add tag badges
+    if (chat.tags && chat.tags.length) {
+      const tagsSpan = document.createElement("span");
+      tagsSpan.className = "chat-item-tags";
+      for (const tag of chat.tags) {
+        const tagBtn = document.createElement("span");
+        tagBtn.className = "tag-badge";
+        tagBtn.textContent = `#${tag}`;
+        tagBtn.title = tag;
+        tagsSpan.appendChild(tagBtn);
+      }
+      meta.appendChild(tagsSpan);
+    }
     main.append(title, meta);
     main.addEventListener("click", () => {
       selectChat(chatState, chat.id);
@@ -444,6 +654,19 @@ function refreshChatList() {
 
     const actions = document.createElement("div");
     actions.className = "chat-item-actions";
+
+    // Bulk select toggle for bulk mode
+    const selectToggle = document.createElement("button");
+    selectToggle.type = "button";
+    selectToggle.className = "mini-btn select-toggle";
+    selectToggle.setAttribute("aria-label", isSelected ? "Deselect chat" : "Select chat");
+    selectToggle.setAttribute("aria-pressed", String(isSelected));
+    selectToggle.textContent = isSelected ? "✓" : "○";
+    selectToggle.addEventListener("click", () => {
+      bulkSelectChat(chatState, chat.id);
+      refreshChatList();
+    });
+    actions.append(selectToggle);
 
     const renameBtn = document.createElement("button");
     renameBtn.type = "button";
@@ -476,6 +699,46 @@ function refreshChatList() {
   }
 }
 
+function buildBulkBar(count) {
+  const bar = document.createElement("div");
+  bar.className = "chat-bulk-bar";
+
+  const label = document.createElement("span");
+  label.className = "chat-bulk-count";
+  label.textContent = `${count} selected`;
+
+  const action = (text, className, onClick) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = className;
+    btn.textContent = text;
+    btn.addEventListener("click", onClick);
+    return btn;
+  };
+
+  bar.append(
+    label,
+    action("Tag", "btn", () => {
+      const tag = (prompt("Tag the selected chats:", "") || "").trim().replace(/^#/, "").toLowerCase();
+      if (!tag) return;
+      bulkToggleTagSelected(chatState, tag);
+      populateTagFilter();
+      refreshChatList();
+    }),
+    action("Delete selected", "btn btn-danger", () => {
+      if (!confirm(`Delete ${count} selected chat${count === 1 ? "" : "s"}?`)) return;
+      bulkDeleteSelected(chatState);
+      renderActiveChat();
+      refreshChatList();
+    }),
+    action("Clear", "btn", () => {
+      bulkDeselectAll(chatState);
+      refreshChatList();
+    })
+  );
+  return bar;
+}
+
 els.chatsBtn.addEventListener("click", openChats);
 els.chatsClose.addEventListener("click", closeChats);
 els.chatsBackdrop.addEventListener("click", closeChats);
@@ -496,6 +759,24 @@ els.exportBtn.addEventListener("click", () => {
   a.download = `stheno-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+});
+
+els.exportCurrentBtn.addEventListener("click", () => {
+  const chat = activeChat(chatState);
+  if (!chat) {
+    addSystemMessage("No active chat to export.", true);
+    return;
+  }
+  const data = exportCurrentChat(chatState);
+  if (!data) return;
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `stheno-export-${chat.title || "chat"}-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  addSystemMessage(`Exported chat “${chat.title || "untitled"}".`);
 });
 
 els.importBtn.addEventListener("click", () => els.importFile.click());
@@ -540,6 +821,9 @@ function syncSettingsForm() {
   els.personaInput.value = settings.persona;
   els.contextInput.value = settings.contextCount;
   els.worldNotesInput.value = settings.worldNotes;
+  els.tempInput.value = settings.temperature;
+  els.toppInput.value = settings.topP;
+  els.maxtokensInput.value = settings.maxTokens;
   els.chatMemoryInput.value = activeChat(chatState)?.memorySummary || "";
 }
 
@@ -552,12 +836,19 @@ function applySettings() {
   settings.persona = els.personaInput.value;
   settings.contextCount = Math.max(0, Math.min(50, Number(els.contextInput.value) || 0));
   settings.worldNotes = els.worldNotesInput.value;
+  settings.temperature = Math.max(0.1, Math.min(2, Number(els.tempInput.value) || 0.7));
+  settings.topP = Math.max(0.1, Math.min(1, Number(els.toppInput.value) || 0.9));
+  settings.maxTokens = Math.max(1, Math.min(4096, Number(els.maxtokensInput.value) || 512));
 
   localStorage.setItem(LS_KEYS.token, settings.token);
   localStorage.setItem(LS_KEYS.space, settings.space);
   localStorage.setItem(LS_KEYS.persona, settings.persona);
   localStorage.setItem(LS_KEYS.contextCount, String(settings.contextCount));
   localStorage.setItem(LS_KEYS.worldNotes, settings.worldNotes);
+  localStorage.setItem(LS_KEYS.temperature, String(settings.temperature));
+  localStorage.setItem(LS_KEYS.topP, String(settings.topP));
+  localStorage.setItem(LS_KEYS.maxTokens, String(settings.maxTokens));
+  updateContextVisualizer();
 
   const chat = activeChat(chatState);
   if (chat) setChatMemory(chatState, chat, els.chatMemoryInput.value);
@@ -596,6 +887,25 @@ els.tokenToggle.addEventListener("click", () => {
   els.eyeClosed.hidden = !show;
   els.tokenToggle.setAttribute("aria-pressed", String(show));
   els.tokenInput.focus();
+  // Show brief warning when revealing sensitive text
+  if (show) {
+    const existingWarning = els.tokenToggle.dataset.revealedWarning;
+    if (!existingWarning) {
+      const warn = document.createElement("span");
+      warn.className = "token-warning";
+      warn.textContent = " — input revealed (keep screen clean)";
+      warn.style.fontSize = "10px";
+      warn.style.marginLeft = "6px";
+      warn.style.color = "#a81f3c";
+      els.tokenToggle.appendChild(warn);
+      els.tokenToggle.dataset.revealedWarning = "1";
+      // Auto-remove after 3 seconds
+      setTimeout(() => {
+        if (warn.parentNode) warn.parentNode.removeChild(warn);
+        els.tokenToggle.dataset.revealedWarning = "";
+      }, 3000);
+    }
+  }
 });
 
 els.clearChatBtn.addEventListener("click", () => {
@@ -618,6 +928,7 @@ function init() {
   syncSettingsForm();
   renderActiveChat();
   refreshChatList();
+  updateContextVisualizer();
   updateSendButton();
 
   if (settings.token) {
@@ -626,7 +937,9 @@ function init() {
     setStatus("disconnected", "Token required");
     if (!chatState.chats.length) openSettings();
   }
-
+  // Populate tag filter
+  populateTagFilter();
+  setupChatSearch();
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker
@@ -636,4 +949,215 @@ function init() {
   }
 }
 
+
+
+/* ---------- mobile enhancements ---------- */
+
+// Shake to summarize (mobile Easter egg)
+let shakeTimeout = null;
+let shakeCount = 0;
+
+window.addEventListener('devicemotion', (event) => {
+  if (!settings.token || generating) return;
+  
+  const acceleration = event.accelerationIncludingGravity;
+  if (!acceleration) return;
+  
+  const threshold = 15;
+  const currentTime = Date.now();
+  
+  if (shakeTimeout) {
+    if (currentTime - shakeTimeout < 800) {
+      shakeCount++;
+      if (shakeCount >= 3) {
+        shakeCount = 0;
+        shakeTimeout = null;
+        // Trigger summarize if in settings
+        if (els.panel.classList.contains('open')) {
+          summarizeChatMemory();
+        } else {
+          addSystemMessage('Shake detected! Open Settings and tap Summarize to capture memory.');
+        }
+      }
+    } else {
+      shakeTimeout = currentTime;
+      shakeCount = 1;
+    }
+  } else {
+    shakeTimeout = currentTime;
+    shakeCount = 1;
+  }
+}, { passive: true });
+
+// Focus management on mobile
+els.input.addEventListener('focus', () => {
+  // Small delay to ensure keyboard is shown
+  setTimeout(() => {
+    els.chat.scrollTop = els.chat.scrollHeight;
+  }, 100);
+});
+
+// Remove default drag on images within the chat
+els.chat.addEventListener('dragstart', (e) => {
+  const tag = e.target.tagName.toLowerCase();
+  if (tag === 'img' || tag === 'svg') {
+    e.preventDefault();
+  }
+});
 init();
+
+/* ---------- quick prompt library ---------- */
+
+const LS_KEYS_QUICK_PROMPT = "stheno_quick_prompts";
+
+const quickPrompts = (() => {
+  try {
+    const raw = localStorage.getItem(LS_KEYS_QUICK_PROMPT);
+    const prompts = raw ? JSON.parse(raw) : [];
+    return Array.isArray(prompts) ? prompts : [];
+  } catch {
+    return [];
+  }
+})();
+
+function saveQuickPrompts() {
+  try {
+    localStorage.setItem(LS_KEYS_QUICK_PROMPT, JSON.stringify(quickPrompts));
+  } catch {
+    // storage unavailable — prompts simply won't persist
+  }
+}
+
+function renderPromptList() {
+  els.promptList.innerHTML = "";
+  if (!quickPrompts.length) {
+    const empty = document.createElement("p");
+    empty.className = "chat-list-empty";
+    empty.textContent = "No saved prompts yet — add one below.";
+    els.promptList.appendChild(empty);
+    return;
+  }
+  for (const item of quickPrompts) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "prompt-btn";
+    const label = item.name || item.text;
+    btn.textContent = label.length > 30 ? `${label.slice(0, 30)}…` : label;
+    btn.title = item.text;
+    btn.addEventListener("click", () => insertPrompt(item.text));
+    els.promptList.appendChild(btn);
+  }
+}
+
+function insertPrompt(text) {
+  els.input.value += `${text} `;
+  resizeInput();
+  updateSendButton();
+  if (els.panel.classList.contains("open")) closeSettings();
+  els.input.focus();
+}
+
+els.promptAddBtn.addEventListener("click", () => {
+  const name = prompt("Enter a name for this prompt template:", "");
+  if (name === null) return;
+  const text = prompt("Enter the prompt text:", "") || "";
+  if (text.trim()) {
+    quickPrompts.push({ name: name.trim(), text: text.trim() });
+    saveQuickPrompts();
+    renderPromptList();
+  }
+});
+
+// Initialize
+renderPromptList();
+
+
+/* ---------- persona presets ---------- */
+
+const LS_KEYS_PERSONA_PRESETS = 'stheno_persona_presets';
+
+const personaPresets = (() => {
+  try {
+    const raw = localStorage.getItem(LS_KEYS_PERSONA_PRESETS);
+    const presets = raw ? JSON.parse(raw) : [];
+    return Array.isArray(presets) ? presets : [];
+  } catch {
+    return [];
+  }
+})();
+
+function savePersonaPresets() {
+  try {
+    localStorage.setItem(LS_KEYS_PERSONA_PRESETS, JSON.stringify(personaPresets));
+  } catch {
+    // storage unavailable — presets simply won't persist
+  }
+}
+
+function renderPresetList() {
+  els.presetList.innerHTML = '';
+  if (!personaPresets.length) {
+    const empty = document.createElement('p');
+    empty.className = 'chat-list-empty';
+    empty.textContent = 'No saved presets yet — add one below.';
+    els.presetList.appendChild(empty);
+    return;
+  }
+  for (const preset of personaPresets) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'preset-btn' + (preset.isActive ? ' active' : '');
+    btn.textContent = preset.name.length > 20 ? preset.name.slice(0, 20) + '…' : preset.name;
+    btn.addEventListener('click', () => applyPreset(preset.name));
+    els.presetList.appendChild(btn);
+  }
+}
+
+function applyPreset(name) {
+  const preset = personaPresets.find((p) => p.name === name);
+  if (!preset) return;
+  for (const p of personaPresets) p.isActive = p === preset;
+  savePersonaPresets();
+  usePresets([preset]);
+}
+
+function applyAllPresets() {
+  if (!personaPresets.length) {
+    addSystemMessage("No presets saved yet — add one first.", true);
+    return;
+  }
+  for (const p of personaPresets) p.isActive = true;
+  savePersonaPresets();
+  usePresets(personaPresets);
+}
+
+function usePresets(presets) {
+  const text = presets.map((p) => p.systemPrompt.trim()).filter(Boolean).join("\n\n");
+  if (!text) return;
+  els.personaInput.value = text;
+  settings.persona = text;
+  localStorage.setItem(LS_KEYS.persona, settings.persona);
+  renderPresetList();
+  closeSettings();
+  addSystemMessage(
+    presets.length > 1
+      ? `Applied all ${presets.length} presets to the character prompt.`
+      : `Applied preset: ${presets[0].name}`
+  );
+}
+
+els.presetAddBtn.addEventListener('click', () => {
+  const name = prompt('Enter a name for this persona preset:', '');
+  if (name === null) return;
+  const systemPrompt = prompt('Enter the system prompt text:', '') || '';
+  if (systemPrompt.trim()) {
+    personaPresets.push({ name: name.trim(), systemPrompt: systemPrompt.trim(), isActive: false });
+    savePersonaPresets();
+    renderPresetList();
+  }
+});
+
+els.presetApplyAllBtn.addEventListener("click", applyAllPresets);
+
+// Initialize
+renderPresetList();

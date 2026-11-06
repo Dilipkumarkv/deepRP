@@ -3,7 +3,7 @@ const LEGACY_MESSAGES_KEY = "stheno_messages";
 
 const MAX_MESSAGES_PER_CHAT = 200;
 const MAX_CHATS = 50;
-const MAX_TRANSCRIPT_CHARS = 12000;
+export const MAX_TRANSCRIPT_CHARS = 12000;
 
 function save(state) {
   try {
@@ -100,7 +100,6 @@ export function createChat(state) {
   state.activeId = chat.id;
   if (state.chats.length > MAX_CHATS) state.chats.length = MAX_CHATS;
   save(state);
-  updateContextVisualizer();
   return chat;
 }
 
@@ -108,7 +107,6 @@ export function selectChat(state, id) {
   if (state.chats.some((c) => c.id === id)) {
     state.activeId = id;
     save(state);
-    updateContextVisualizer();
   }
 }
 
@@ -116,7 +114,6 @@ export function deleteChat(state, id) {
   state.chats = state.chats.filter((c) => c.id !== id);
   if (state.activeId === id) state.activeId = state.chats[0]?.id ?? null;
   save(state);
-  updateContextVisualizer();
 }
 
 export function renameChat(state, id, title) {
@@ -124,7 +121,6 @@ export function renameChat(state, id, title) {
   if (chat && title.trim()) {
     chat.title = title.trim().slice(0, 80);
     save(state);
-    updateContextVisualizer();
   }
 }
 
@@ -281,6 +277,5 @@ export function importBackup(state, jsonText) {
   // Only set activeId if we have chats; otherwise keep existing or null
   state.activeId = cleaned.length ? cleaned[0].id : (state.activeId ?? null);
   save(state);
-  updateContextVisualizer();
   return cleaned.length;
 }

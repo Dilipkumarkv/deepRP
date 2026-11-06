@@ -47,6 +47,7 @@
   --danger: #a81f3c;
   --danger-soft: rgba(168, 31, 60, 0.09);
   --ok: #167154;
+  --ok-soft: rgba(22, 113, 84, 0.1);
   --warn: #8a5900;
   --shadow: 0 14px 34px rgba(89, 48, 55, 0.14), 0 3px 10px rgba(89, 48, 55, 0.08);
   --shadow-soft: 0 6px 18px rgba(89, 48, 55, 0.09);
@@ -72,6 +73,7 @@
   --danger: #ff9dad;
   --danger-soft: rgba(255, 157, 173, 0.1);
   --ok: #72d5af;
+  --ok-soft: rgba(114, 213, 175, 0.12);
   --warn: #f2c76e;
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.34), 0 3px 12px rgba(0, 0, 0, 0.22);
   --shadow-soft: 0 7px 20px rgba(0, 0, 0, 0.24);
@@ -283,6 +285,23 @@ button {
   border-bottom-left-radius: 8px;
   background: var(--surface);
   box-shadow: var(--shadow-soft);
+}
+
+.msg-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  white-space: normal;
+}
+
+.msg-actions .thumb-btn.is-up {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.msg-actions .thumb-btn.is-down {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .msg-system {
@@ -700,6 +719,91 @@ button {
   padding-right: 7px;
 }
 
+.select-toggle {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.select-toggle[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+.chat-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.chat-bulk-count {
+  flex: 1 1 auto;
+  min-width: 64px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.chat-bulk-bar .btn {
+  min-height: 34px;
+  padding: 6px 13px;
+  font-size: 12.5px;
+}
+
+.context-visualizer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.context-visualizer .context-progress {
+  flex: 1;
+  height: 6px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.context-visualizer .context-progress::-webkit-progress-bar {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.context-visualizer .context-progress::-webkit-progress-value {
+  background: var(--ok);
+  border-radius: 3px;
+  transition: width 180ms ease, background-color 180ms ease;
+}
+
+.context-visualizer .context-progress::-moz-progress-bar {
+  background: var(--ok);
+  border-radius: 3px;
+}
+
+.context-visualizer.warn .context-progress::-webkit-progress-value {
+  background: var(--warn);
+}
+
+.context-visualizer.danger .context-progress::-webkit-progress-value {
+  background: var(--danger);
+}
+
+.context-label {
+  flex-shrink: 0;
+}
+
+.context-current,
+.context-max {
+  flex-shrink: 0;
+  padding: 0 2px;
+}
+
 .mini-btn {
   width: 31px;
   height: 31px;
@@ -770,6 +874,193 @@ button:focus-visible {
   .chat-item.active .mini-btn:hover {
     background: var(--accent-soft);
   }
+}
+
+.prompt-library {
+  margin-top: 12px;
+}
+
+.prompt-library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.prompt-library-head h3 {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.prompt-library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.prompt-library-list .prompt-btn {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.prompt-library-list .prompt-btn:hover {
+  background: var(--surface-3);
+}
+
+.prompt-library-list .prompt-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.prompt-library-list .prompt-btn.adding {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+
+.chats-head {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.chat-search {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  margin-top: 8px;
+  order: 2;
+}
+
+.chat-search input {
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  font-size: 13px;
+}
+
+.chat-search select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  min-width: 100px;
+}
+
+.tag-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  margin: 2px 4px 2px 0;
+  font-size: 11px;
+  background: var(--surface-3);
+  border-radius: 10px;
+  color: var(--text-dim);
+}
+
+.chat-item-tags {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.preset-library {
+  margin-top: 12px;
+}
+
+.preset-library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.preset-library-head h3 {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.preset-library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.preset-library-list .preset-btn {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.preset-library-list .preset-btn:hover {
+  background: var(--surface-3);
+}
+
+.preset-library-list .preset-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.preset-library-list .preset-btn.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.preset-library-list .preset-btn.adding {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.preset-library-foot {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.preset-library-foot .mini-btn {
+  width: auto;
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* Prevent iOS address bar from showing on load */
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
 }
 
 @media (max-width: 380px) {

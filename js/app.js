@@ -16,6 +16,14 @@ import {
   buildSummaryRequest,
   exportBackup,
   importBackup,
+  exportCurrentChat,
+  filterChatsByTag,
+  bulkSelectChat,
+  bulkGetSelected,
+  bulkDeselectAll,
+  bulkDeleteSelected,
+  bulkToggleTagSelected,
+  MAX_TRANSCRIPT_CHARS,
 } from "./chats.js";
 
 /* ---------- DOM refs ---------- */
@@ -64,6 +72,12 @@ const els = {
   promptLibrary: $("prompt-library"),
   promptList: $("prompt-list"),
   promptAddBtn: $("prompt-add-btn"),
+  searchInput: $("chat-search"),
+  tagFilter: $("tag-filter"),
+  exportCurrentBtn: $("export-current-btn"),
+  presetList: $("preset-list"),
+  presetAddBtn: $("preset-add-btn"),
+  presetApplyAllBtn: $("preset-apply-all-btn"),
 };
 
 /* ---------- constants ---------- */
@@ -169,73 +183,31 @@ function renderMessage(role, text, { error = false, actions = false } = {}) {
     copyBtn.type = "button";
     copyBtn.className = "mini-btn";
     copyBtn.setAttribute("aria-label", "Copy message");
-    copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 16l4-4m0 0l4 4m-4-4l-4 4"/></svg>';
+    copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
     copyBtn.addEventListener("click", () => {
       navigator.clipboard.writeText(text).then(() => {
         addSystemMessage("Message copied to clipboard.");
       }).catch(() => {
         addSystemMessage("Failed to copy message.", true);
       });
-    });
-    const regenBtn = document.createElement("button");
-    regenBtn.type = "button";
-    regenBtn.className = "mini-btn";
-    regenBtn.setAttribute("aria-label", "Regenerate response");
-    regenBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14l2-2l4.5 4.5"/></svg>';
-    regenBtn.addEventListener("click", () => {
-      // Could trigger a regenerate - for now just notify
-      addSystemMessage("Regenerate not yet implemented - long-press the bot message.");
     });
     const thumbsUp = document.createElement("button");
     thumbsUp.type = "button";
-    thumbsUp.className = "mini-btn thumb-btn";
+    thumbsUp.className = "mini-btn thumb-btn up";
     thumbsUp.setAttribute("aria-label", "Thumbs up");
-    thumbsUp.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08l-1.44 1.44a1.5 1.5 0 0 1-2.12 0L12 14.31a1.5 1.5 0 0 1-2.12 0L2.06 9.35a1.5 1.5 0 0 1 0-2.12l1.44-1.44a1.5 1.5 0 0 1 2.12 0z"/><polyline points="22 2 12 22 2 12"/></svg>';
-    thumbsUp.addEventListener("click", () => {
-      toggleFeedback(el, "up");
-    });
+    thumbsUp.setAttribute("aria-pressed", "false");
+    thumbsUp.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
+    thumbsUp.addEventListener("click", () => toggleFeedback(thumbsUp, "up", text));
     const thumbsDown = document.createElement("button");
     thumbsDown.type = "button";
-    thumbsDown.className = "mini-btn thumb-btn";
+    thumbsDown.className = "mini-btn thumb-btn down";
     thumbsDown.setAttribute("aria-label", "Thumbs down");
-    thumbsDown.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><polyline points="14 8 10 12 6 14"/></svg>';
-    thumbsDown.addEventListener("click", () => {
-      toggleFeedback(el, "down");
-    });
-    actionsEl.append(thumbsUp, thumbsDown);
-    // Add copy, regen, and delete buttons too
-    const copyBtn = document.createElement("button");
-    copyBtn.type = "button";
-    copyBtn.className = "mini-btn";
-    copyBtn.setAttribute("aria-label", "Copy message");
-    copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 16l4-4m0 0l4 4m-4-4l-4 4"/></svg>';
-    copyBtn.addEventListener("click", () => {
-      navigator.clipboard.writeText(text).then(() => {
-        addSystemMessage("Message copied to clipboard.");
-      }).catch(() => {
-        addSystemMessage("Failed to copy message.", true);
-      });
-    });
-    const regenBtn = document.createElement("button");
-    regenBtn.type = "button";
-    regenBtn.className = "mini-btn";
-    regenBtn.setAttribute("aria-label", "Regenerate response");
-    regenBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14l2-2l4.5 4.5"/></svg>';
-    regenBtn.addEventListener("click", () => {
-      addSystemMessage("Regenerate not yet implemented.");
-    });
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "mini-btn danger";
-    deleteBtn.setAttribute("aria-label", "Delete message");
-    deleteBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
-    deleteBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (confirm(`Delete this "${role === "bot" ? "bot" : "user"} message?"`)) {
-        addSystemMessage("Message deletion coming in a future update.");
-      }
-    });
-    actionsEl.append(copyBtn, regenBtn, deleteBtn, thumbsUp, thumbsDown);
+    thumbsDown.setAttribute("aria-pressed", "false");
+    thumbsDown.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>';
+    thumbsDown.addEventListener("click", () => toggleFeedback(thumbsDown, "down", text));
+    actionsEl.append(copyBtn, thumbsUp, thumbsDown);
+    const saved = storedFeedback(text);
+    if (saved === "up" || saved === "down") markFeedback(thumbsUp, thumbsDown, saved);
     el.appendChild(actionsEl);
   }
   els.chat.appendChild(el);
@@ -260,7 +232,6 @@ function renderActiveChat() {
     for (const m of chat.messages) renderMessage(m.role, m.text, { actions: m.role === "bot" });
   }
   // Show memory summary hint if chat is long and has no summary
-  const chat = activeChat(chatState);
   if (chat && chat.messages.length >= 30 && !chat.memorySummary.trim()) {
     const hint = document.createElement("div");
     hint.className = "msg-system";
@@ -286,6 +257,7 @@ function updateContextVisualizer() {
   const total = MAX_TRANSCRIPT_CHARS;
   const percent = Math.round((used / total) * 100);
   els.contextCurrent.textContent = `${used} / ${total} chars (${percent}%)`;
+  els.contextProgress.value = Math.max(0, Math.min(100, percent));
   // Add warning classes
   els.contextVisualizer.classList.remove("warn", "danger");
   if (percent >= 80) {
@@ -298,42 +270,37 @@ function updateContextVisualizer() {
 
 
 
-function toggleFeedback(messageEl, direction) {
-  // Find the thumbs up/down buttons in this message element
-  const thumbBtns = messageEl.querySelectorAll('.thumb-btn');
-  const isUp = direction === 'up';
-  
-  thumbBtns.forEach((btn) => {
-    btn.disabled = true;
-    if (isUp) {
-      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08l-1.44 1.44a1.5 1.5 0 0 1-2.12 0L12 14.31a1.5 1.5 0 0 1-2.12 0L2.06 9.35a1.5 1.5 0 0 1 0-2.12l1.44-1.44a1.5 1.5 0 0 1 2.12 0z"/><polyline points="22 2 12 22 2 12"/></svg>';
-      btn.style.color = '#16a34a';
-      btn.style.background = 'var(--ok-soft)';
-    } else {
-      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><polyline points="14 8 10 12 6 14"/></svg>';
-      btn.style.color = '#ef4444';
-      btn.style.background = 'var(--danger-soft)';
-    }
-  });
-  
-  // Store feedback in localStorage
+function feedbackStore() {
   const chat = activeChat(chatState);
-  if (chat && settings.token) {
-    const feedbackKey = "stheno_feedback_" + chat.id;
-    const existing = JSON.parse(localStorage.getItem(feedbackKey) || '{}');
-    existing[messageEl.textContent] = direction;
-    localStorage.setItem(feedbackKey, JSON.stringify(existing));
-  }
-  
-  // Show temporary feedback
-  addSystemMessage('Feedback recorded: ' + (direction === 'up' ? 'up' : 'down'));
-  
-  // Re-enable after a brief delay
-  setTimeout(() => {
-    thumbBtns.forEach((btn) => {
-      btn.disabled = false;
-    });
-  }, 1000);
+  if (!chat) return null;
+  const key = `stheno_feedback_${chat.id}`;
+  return { key, data: JSON.parse(localStorage.getItem(key) || "{}") };
+}
+
+function storedFeedback(text) {
+  const store = feedbackStore();
+  return store ? store.data[text] ?? null : null;
+}
+
+function markFeedback(upBtn, downBtn, direction) {
+  upBtn.classList.toggle("is-up", direction === "up");
+  downBtn.classList.toggle("is-down", direction === "down");
+  upBtn.setAttribute("aria-pressed", String(direction === "up"));
+  downBtn.setAttribute("aria-pressed", String(direction === "down"));
+}
+
+function toggleFeedback(button, direction, text) {
+  const bubble = button.closest(".msg");
+  const upBtn = bubble.querySelector(".thumb-btn.up");
+  const downBtn = bubble.querySelector(".thumb-btn.down");
+  const next = storedFeedback(text) === direction ? null : direction;
+  markFeedback(upBtn, downBtn, next);
+  const store = feedbackStore();
+  if (!store) return;
+  if (next) store.data[text] = next;
+  else delete store.data[text];
+  localStorage.setItem(store.key, JSON.stringify(store.data));
+  addSystemMessage(next ? `Feedback recorded: ${next}` : "Feedback cleared.");
 }
 
 function storeMessage(chat, role, text) {
@@ -579,6 +546,7 @@ els.send.addEventListener("click", sendMessage);
 /* ---------- chats drawer ---------- */
 
 function openChats() {
+  populateTagFilter();
   refreshChatList();
   els.chatsBackdrop.hidden = false;
   els.chatsPanel.classList.add("open");
@@ -596,14 +564,41 @@ const ICONS = {
   delete: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
 };
 
+function populateTagFilter() {
+  if (!els.tagFilter) return;
+  const current = els.tagFilter.value || "";
+  const tags = [...new Set(chatState.chats.flatMap((c) => c.tags || []))].sort((a, b) =>
+    a.localeCompare(b)
+  );
+  els.tagFilter.innerHTML = "";
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = "All chats";
+  els.tagFilter.appendChild(all);
+  for (const tag of tags) {
+    const opt = document.createElement("option");
+    opt.value = tag;
+    opt.textContent = `#${tag}`;
+    els.tagFilter.appendChild(opt);
+  }
+  els.tagFilter.value = tags.includes(current) ? current : "";
+}
+
+function setupChatSearch() {
+  els.searchInput?.addEventListener("input", refreshChatList);
+  els.tagFilter?.addEventListener("change", refreshChatList);
+}
+
 function refreshChatList() {
   els.chatList.innerHTML = "";
   const searchTerm = els.searchInput ? (els.searchInput.value || "").toLowerCase() : "";
   const tagFilter = els.tagFilter ? (els.tagFilter.value || "") : "";
-  const filteredChats = tagFilter
-    ? filterChatsByTag(chatState, tagFilter)
-    : chatState.chats;
+  let filteredChats = tagFilter ? filterChatsByTag(chatState, tagFilter) : chatState.chats;
+  if (searchTerm) {
+    filteredChats = filteredChats.filter((c) => c.title.toLowerCase().includes(searchTerm));
+  }
   const selectedChats = bulkGetSelected(chatState);
+  if (selectedChats.length) els.chatList.appendChild(buildBulkBar(selectedChats.length));
   if (!filteredChats.length) {
     const empty = document.createElement("p");
     empty.className = "chat-list-empty";
@@ -661,18 +656,17 @@ function refreshChatList() {
     actions.className = "chat-item-actions";
 
     // Bulk select toggle for bulk mode
-    if (selectedChats.length > 0 || chat._selected) {
-      const selectToggle = document.createElement("button");
-      selectToggle.type = "button";
-      selectToggle.className = "mini-btn";
-      selectToggle.setAttribute("aria-label", "Deselect chat");
-      selectToggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M33 11l-1 6L18 21l-5-5L14 4l8.58 8.58a5 5 0 0 1-7.07 7.07l-0.07 0.07"/><path d="M5 18h14"/><path d="M13 11l7 7L27 3"/><path d="M11 5l7 7L27 3"/></svg>';
-      selectToggle.addEventListener("click", () => {
-        bulkDeselectAll(chatState);
-        refreshChatList();
-      });
-      actions.append(selectToggle);
-    }
+    const selectToggle = document.createElement("button");
+    selectToggle.type = "button";
+    selectToggle.className = "mini-btn select-toggle";
+    selectToggle.setAttribute("aria-label", isSelected ? "Deselect chat" : "Select chat");
+    selectToggle.setAttribute("aria-pressed", String(isSelected));
+    selectToggle.textContent = isSelected ? "✓" : "○";
+    selectToggle.addEventListener("click", () => {
+      bulkSelectChat(chatState, chat.id);
+      refreshChatList();
+    });
+    actions.append(selectToggle);
 
     const renameBtn = document.createElement("button");
     renameBtn.type = "button";
@@ -699,25 +693,50 @@ function refreshChatList() {
       refreshChatList();
     });
 
-    // Bulk operation buttons shown when in bulk mode
-    if (selectedChats.length > 0 || chat._selected) {
-      const bulkDeleteBtn = document.createElement("button");
-      bulkDeleteBtn.type = "button";
-      bulkDeleteBtn.className = "mini-btn danger";
-      bulkDeleteBtn.setAttribute("aria-label", "Delete selected chats");
-      bulkDeleteBtn.textContent = `${selectedChats.length > 1 ? `${selectedChats.length} chats` : "1 chat"} delete`;
-      bulkDeleteBtn.addEventListener("click", () => {
-        bulkDeleteSelected(chatState);
-        renderActiveChat();
-        refreshChatList();
-      });
-      actions.append(bulkDeleteBtn);
-    }
-
     actions.append(renameBtn, deleteBtn);
     item.append(main, actions);
     els.chatList.appendChild(item);
   }
+}
+
+function buildBulkBar(count) {
+  const bar = document.createElement("div");
+  bar.className = "chat-bulk-bar";
+
+  const label = document.createElement("span");
+  label.className = "chat-bulk-count";
+  label.textContent = `${count} selected`;
+
+  const action = (text, className, onClick) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = className;
+    btn.textContent = text;
+    btn.addEventListener("click", onClick);
+    return btn;
+  };
+
+  bar.append(
+    label,
+    action("Tag", "btn", () => {
+      const tag = (prompt("Tag the selected chats:", "") || "").trim().replace(/^#/, "").toLowerCase();
+      if (!tag) return;
+      bulkToggleTagSelected(chatState, tag);
+      populateTagFilter();
+      refreshChatList();
+    }),
+    action("Delete selected", "btn btn-danger", () => {
+      if (!confirm(`Delete ${count} selected chat${count === 1 ? "" : "s"}?`)) return;
+      bulkDeleteSelected(chatState);
+      renderActiveChat();
+      refreshChatList();
+    }),
+    action("Clear", "btn", () => {
+      bulkDeselectAll(chatState);
+      refreshChatList();
+    })
+  );
+  return bar;
 }
 
 els.chatsBtn.addEventListener("click", openChats);
@@ -822,13 +841,14 @@ function applySettings() {
   settings.maxTokens = Math.max(1, Math.min(4096, Number(els.maxtokensInput.value) || 512));
 
   localStorage.setItem(LS_KEYS.token, settings.token);
-  updateContextVisualizer();
   localStorage.setItem(LS_KEYS.space, settings.space);
   localStorage.setItem(LS_KEYS.persona, settings.persona);
   localStorage.setItem(LS_KEYS.contextCount, String(settings.contextCount));
+  localStorage.setItem(LS_KEYS.worldNotes, settings.worldNotes);
   localStorage.setItem(LS_KEYS.temperature, String(settings.temperature));
   localStorage.setItem(LS_KEYS.topP, String(settings.topP));
   localStorage.setItem(LS_KEYS.maxTokens, String(settings.maxTokens));
+  updateContextVisualizer();
 
   const chat = activeChat(chatState);
   if (chat) setChatMemory(chatState, chat, els.chatMemoryInput.value);
@@ -921,7 +941,6 @@ function init() {
   populateTagFilter();
   setupChatSearch();
   if ("serviceWorker" in navigator) {
-  if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker
         .register("./sw.js")
@@ -969,14 +988,6 @@ window.addEventListener('devicemotion', (event) => {
     shakeCount = 1;
   }
 }, { passive: true });
-
-// Improve textarea height adjustment for mobile
-function resizeInput() {
-  els.input.style.height = 'auto';
-  const height = Math.min(els.input.scrollHeight, 200);
-  els.input.style.height = height + 'px';
-  els.input.style.overflowY = els.input.scrollHeight > 200 ? 'auto' : 'hidden';
-}
 
 // Focus management on mobile
 els.input.addEventListener('focus', () => {
@@ -1026,20 +1037,23 @@ function renderPromptList() {
     els.promptList.appendChild(empty);
     return;
   }
-  for (const prompt of quickPrompts) {
+  for (const item of quickPrompts) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "prompt-btn";
-    btn.textContent = prompt.length > 30 ? `${prompt.slice(0, 30)}…` : prompt;
-    btn.addEventListener("click", () => insertPrompt(prompt));
+    const label = item.name || item.text;
+    btn.textContent = label.length > 30 ? `${label.slice(0, 30)}…` : label;
+    btn.title = item.text;
+    btn.addEventListener("click", () => insertPrompt(item.text));
     els.promptList.appendChild(btn);
   }
 }
 
 function insertPrompt(text) {
-  els.input.value += text + " ";
+  els.input.value += `${text} `;
   resizeInput();
   updateSendButton();
+  if (els.panel.classList.contains("open")) closeSettings();
   els.input.focus();
 }
 
@@ -1102,15 +1116,34 @@ function renderPresetList() {
 function applyPreset(name) {
   const preset = personaPresets.find((p) => p.name === name);
   if (!preset) return;
-  // Set the persona input to the preset's system prompt
-  els.personaInput.value = preset.systemPrompt;
-  // Update settings
-  settings.persona = preset.systemPrompt;
-  // Save to localStorage
+  for (const p of personaPresets) p.isActive = p === preset;
+  savePersonaPresets();
+  usePresets([preset]);
+}
+
+function applyAllPresets() {
+  if (!personaPresets.length) {
+    addSystemMessage("No presets saved yet — add one first.", true);
+    return;
+  }
+  for (const p of personaPresets) p.isActive = true;
+  savePersonaPresets();
+  usePresets(personaPresets);
+}
+
+function usePresets(presets) {
+  const text = presets.map((p) => p.systemPrompt.trim()).filter(Boolean).join("\n\n");
+  if (!text) return;
+  els.personaInput.value = text;
+  settings.persona = text;
   localStorage.setItem(LS_KEYS.persona, settings.persona);
-  // Close presets and refresh
+  renderPresetList();
   closeSettings();
-  addSystemMessage('Applied preset: ' + name);
+  addSystemMessage(
+    presets.length > 1
+      ? `Applied all ${presets.length} presets to the character prompt.`
+      : `Applied preset: ${presets[0].name}`
+  );
 }
 
 els.presetAddBtn.addEventListener('click', () => {
@@ -1123,6 +1156,8 @@ els.presetAddBtn.addEventListener('click', () => {
     renderPresetList();
   }
 });
+
+els.presetApplyAllBtn.addEventListener("click", applyAllPresets);
 
 // Initialize
 renderPresetList();

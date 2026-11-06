@@ -47,6 +47,7 @@
   --danger: #a81f3c;
   --danger-soft: rgba(168, 31, 60, 0.09);
   --ok: #167154;
+  --ok-soft: rgba(22, 113, 84, 0.1);
   --warn: #8a5900;
   --shadow: 0 14px 34px rgba(89, 48, 55, 0.14), 0 3px 10px rgba(89, 48, 55, 0.08);
   --shadow-soft: 0 6px 18px rgba(89, 48, 55, 0.09);
@@ -72,6 +73,7 @@
   --danger: #ff9dad;
   --danger-soft: rgba(255, 157, 173, 0.1);
   --ok: #72d5af;
+  --ok-soft: rgba(114, 213, 175, 0.12);
   --warn: #f2c76e;
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.34), 0 3px 12px rgba(0, 0, 0, 0.22);
   --shadow-soft: 0 7px 20px rgba(0, 0, 0, 0.24);
@@ -283,6 +285,23 @@ button {
   border-bottom-left-radius: 8px;
   background: var(--surface);
   box-shadow: var(--shadow-soft);
+}
+
+.msg-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  white-space: normal;
+}
+
+.msg-actions .thumb-btn.is-up {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.msg-actions .thumb-btn.is-down {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .msg-system {
@@ -700,6 +719,39 @@ button {
   padding-right: 7px;
 }
 
+.select-toggle {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.select-toggle[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+.chat-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.chat-bulk-count {
+  flex: 1 1 auto;
+  min-width: 64px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.chat-bulk-bar .btn {
+  min-height: 34px;
+  padding: 6px 13px;
+  font-size: 12.5px;
+}
+
 .context-visualizer {
   display: flex;
   align-items: center;
@@ -896,14 +948,14 @@ button:focus-visible {
   flex: 1;
   min-width: 120px;
   padding: 8px 12px;
-  border: 1px var(--border);
+  border: 1px solid var(--border);
   border-radius: 16px;
   font-size: 13px;
 }
 
 .chat-search select {
   padding: 8px 12px;
-  border: 1px var(--border);
+  border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--surface-2);
   color: var(--text);
@@ -993,41 +1045,16 @@ button:focus-visible {
   justify-content: flex-end;
 }
 
-/* Mobile-specific enhancements */
-@media (touch-pointer: fine) {
-  .msg-actions {
-    padding: 4px;
-  }
-  
-  .mini-btn {
-    padding: 6px 8px;
-    font-size: 11px;
-  }
-  
-  .tag-badge {
-    padding: 1px 4px;
-    font-size: 10px;
-    margin: 1px 2px 1px 0;
-  }
-  
-  .chat-item-main {
-    padding: 8px;
-  }
-  
-  .chat-item-title {
-    font-size: 12px;
-  }
-  
-  .chat-item-meta {
-    font-size: 10px;
-  }
-}
-
-/* Portrait mode tweaks */
-@media (orientation: portrait) {
-  .app {
-    max-height: 100dv;
-  }
+.preset-library-foot .mini-btn {
+  width: auto;
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
 }
 
 /* Prevent iOS address bar from showing on load */
@@ -1036,27 +1063,6 @@ html {
   -webkit-tap-highlight-color: rgba(0,0,0,0);
 }
 
-/* Improve tap targets on mobile */
-@media (max-width: 480px) {
-  .chat-item-actions {
-    flex-direction: column;
-    gap: 4px;
-  }
-  
-  .mini-btn {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .chat-item.main {
-    flex-direction: column;
-  }
-  
-  .chat-item-title {
-    white-space: normal;
-    text-align: center;
-  }
-}
 @media (max-width: 380px) {
   .app-header {
     gap: 6px;
