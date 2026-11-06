@@ -27,6 +27,7 @@ function sanitizeChat(chat) {
     createdAt: chat.createdAt || Date.now(),
     updatedAt: chat.updatedAt || Date.now(),
     memorySummary: typeof chat.memorySummary === "string" ? chat.memorySummary : "",
+    tags: Array.isArray(chat.tags) ? chat.tags.slice(0) : [],
     messages: sanitizeMessages(chat.messages),
   };
 }
@@ -36,14 +37,21 @@ function migrateLegacy() {
   try {
     const raw = localStorage.getItem(LEGACY_MESSAGES_KEY);
     const legacy = raw ? JSON.parse(raw) : [];
-    if (Array.isArray(legacy) && legacy.length) {
-      const chat = sanitizeChat({ id: crypto.randomUUID(), title: "First chat", messages: legacy });
-      state.chats.push(chat);
-      state.activeId = chat.id;
+    if (Array.isArray(legacy)) {
+      if (legacy.length) {
+        const chat = sanitizeChat({ id: crypto.randomUUID(), title: "First chat", messages: legacy });
+        state.chats.push(chat);
+        state.activeId = chat.id;
+      }
+      // Successfully processed legacy data — remove it regardless
+      localStorage.removeItem(LEGACY_MESSAGES_KEY);
+    } else {
+      // Legacy key exists but is not an array; still clear it to avoid repeated attempts
+      localStorage.removeItem(LEGACY_MESSAGES_KEY);
     }
-    localStorage.removeItem(LEGACY_MESSAGES_KEY);
   } catch {
-    // corrupt legacy data is simply not migrated
+    // corrupt legacy data is simply not migrated; keep the key so user can debug
+    // or try again later; do not overwrite with empty state
   }
   save(state);
   return state;
@@ -76,6 +84,11 @@ export function activeChat(state) {
   return state.chats.find((c) => c.id === state.activeId) || null;
 }
 
+export function filterChatsByTag(state, tag) {
+  if (!tag || tag.trim() === "") return state.chats;
+  return state.chats.filter((c) => c.tags && c.tags.includes(tag.trim()));
+}
+
 function touch(state, chat) {
   chat.updatedAt = Date.now();
   state.chats = [chat, ...state.chats.filter((c) => c.id !== chat.id)];
@@ -87,6 +100,7 @@ export function createChat(state) {
   state.activeId = chat.id;
   if (state.chats.length > MAX_CHATS) state.chats.length = MAX_CHATS;
   save(state);
+  updateContextVisualizer();
   return chat;
 }
 
@@ -94,6 +108,7 @@ export function selectChat(state, id) {
   if (state.chats.some((c) => c.id === id)) {
     state.activeId = id;
     save(state);
+    updateContextVisualizer();
   }
 }
 
@@ -101,6 +116,7 @@ export function deleteChat(state, id) {
   state.chats = state.chats.filter((c) => c.id !== id);
   if (state.activeId === id) state.activeId = state.chats[0]?.id ?? null;
   save(state);
+  updateContextVisualizer();
 }
 
 export function renameChat(state, id, title) {
@@ -108,7 +124,46 @@ export function renameChat(state, id, title) {
   if (chat && title.trim()) {
     chat.title = title.trim().slice(0, 80);
     save(state);
+    updateContextVisualizer();
   }
+}
+
+export function bulkSelectChat(state, id) {
+  state.chats = state.chats.map((c) => {
+    if (c.id === id) c._selected = !c._selected;
+    return c;
+  });
+  save(state);
+}
+
+export function bulkDeselectAll(state) {
+  state.chats = state.chats.map((c) => { c._selected = false; return c; });
+  save(state);
+}
+
+export function bulkGetSelected(state) {
+  return state.chats.filter((c) => c._selected);
+}
+
+export function bulkDeleteSelected(state) {
+  const selected = bulkGetSelected(state);
+  state.chats = state.chats.filter((c) => !c._selected);
+  if (state.activeId && selected.some((c) => c.id === state.activeId)) {
+    state.activeId = state.chats[0]?.id ?? null;
+  }
+  save(state);
+}
+
+export function bulkToggleTagSelected(state, tag) {
+  state.chats = state.chats.map((c) => {
+    if (c._selected && c.tags) {
+      const idx = c.tags.indexOf(tag);
+      if (idx >= 0) c.tags.splice(idx, 1);
+      else c.tags.push(tag);
+    }
+    return c;
+  });
+  save(state);
 }
 
 export function addChatMessage(state, chat, role, text) {
@@ -122,6 +177,17 @@ export function addChatMessage(state, chat, role, text) {
   }
   touch(state, chat);
   save(state);
+  // Auto-check if memory summary should be updated
+  checkMemorySummary(state, chat);
+  return chat;
+}
+
+function checkMemorySummary(state, chat) {
+  // If chat has many messages and no memory summary, suggest summarizing
+  if (chat.messages.length >= 30 && !chat.memorySummary.trim()) {
+    // Could add a UI prompt here, but for now just log
+    // In a full implementation, this would show a "Summarize now?" prompt
+  }
 }
 
 export function clearChatMessages(state, chat) {
@@ -134,7 +200,7 @@ export function clearChatMessages(state, chat) {
 
 export function setChatMemory(state, chat, summary) {
   if (!state.chats.includes(chat)) return;
-  chat.memorySummary = summary;
+  chat.memorySummary = summary.trim() || "";
   save(state);
 }
 
@@ -154,10 +220,14 @@ export function buildMessagePayload(chat, text, contextCount = 20) {
   const recent = chat.messages.slice(-count);
   if (!recent.length) return text;
   let transcript = recent.map((m) => `${m.role === "user" ? "User" : "Stheno"}: ${m.text}`).join("\n\n");
+  // If even after removing messages we still have too much transcript
+  // with only one message, discard context entirely to avoid overflow
   while (transcript.length > MAX_TRANSCRIPT_CHARS && recent.length > 1) {
     recent.shift();
     transcript = recent.map((m) => `${m.role === "user" ? "User" : "Stheno"}: ${m.text}`).join("\n\n");
   }
+  // If one message remains but transcript is still too long, drop context
+  if (transcript.length > MAX_TRANSCRIPT_CHARS) transcript = "";
   return `Previous messages (context):\n${transcript}\n\nNew message:\n${text}`;
 }
 
@@ -186,6 +256,16 @@ export function exportBackup(state) {
   );
 }
 
+export function exportCurrentChat(state) {
+  const chat = activeChat(state);
+  if (!chat) return null;
+  return JSON.stringify(
+    { app: "stheno-rp", version: 1, exportedAt: new Date().toISOString(), chat },
+    null,
+    2
+  );
+}
+
 export function importBackup(state, jsonText) {
   const data = JSON.parse(jsonText);
   const chats = Array.isArray(data) ? data : data?.chats;
@@ -198,7 +278,9 @@ export function importBackup(state, jsonText) {
     return chat;
   });
   state.chats = cleaned;
-  state.activeId = cleaned[0]?.id ?? null;
+  // Only set activeId if we have chats; otherwise keep existing or null
+  state.activeId = cleaned.length ? cleaned[0].id : (state.activeId ?? null);
   save(state);
+  updateContextVisualizer();
   return cleaned.length;
 }

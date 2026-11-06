@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="theme-color" content="#ffffff" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'none';">
   <meta name="description" content="Mobile roleplay chat client for your Hugging Face Space." />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -54,6 +55,12 @@
     <footer class="composer">
       <div class="composer-inner">
         <textarea id="message-input" rows="1" placeholder="Message Stheno…" enterkeyhint="send" aria-label="Message"></textarea>
+        <div class="context-visualizer" id="context-visualizer" aria-label="Context window usage">
+          <span class="context-label">Context: </span>
+          <span class="context-current" id="context-current">0%</span>
+          <progress class="context-progress" value="0" max="100" id="context-progress" aria-valuemin="0" aria-valuemax="100"></progress>
+          <span class="context-max" id="context-max">100%</span>
+        </div>
         <button type="button" class="send-btn" id="send-btn" aria-label="Send message" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
         </button>
@@ -93,14 +100,69 @@
     </label>
 
     <label class="field">
+      <span class="field-label">Persona Presets</span>
+      <div class="preset-library" id="preset-library">
+        <div class="preset-library-head">
+          <h3>Saved Presets</h3>
+          <button type="button" class="mini-btn" id="preset-add-btn" aria-label="Add new preset">
+            +
+          </button>
+        </div>
+        <div class="preset-library-list" id="preset-list">
+          <!-- Presets will be injected here -->
+        </div>
+        <div class="preset-library-foot">
+          <button type="button" class="mini-btn" id="preset-apply-all-btn" aria-label="Apply all presets">
+            Apply All
+          </button>
+        </div>
+      </div>
+    </label>
+
+    <label class="field">
       <span class="field-label">Context Messages Sent to Model</span>
       <input type="number" id="context-input" min="0" max="50" step="1" />
       <span class="field-hint">How many recent messages Stheno sees each turn (0 = none). Long-term facts belong in memory below.</span>
     </label>
 
     <label class="field">
+      <span class="field-label">Generation Parameters</span>
+      <div class="field">
+        <span class="field-label">Temperature</span>
+        <input type="range" id="temp-input" min="0.1" max="2" step="0.1" value="0.7" />
+        <span class="field-hint">Higher = more random (0.1–2.0)</span>
+      </div>
+      <div class="field">
+        <span class="field-label">Top-p (Nucleus)</span>
+        <input type="range" id="topp-input" min="0.1" max="1" step="0.1" value="0.9" />
+        <span class="field-hint">Higher = more diverse token selection (0.1–1.0)</span>
+      </div>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Max Tokens</span>
+      <input type="number" id="maxtokens-input" min="1" max="4096" step="64" value="512" />
+      <span class="field-hint">Maximum response length (tokens, not characters)</span>
+    </label>
+
+    <label class="field">
       <span class="field-label">World Notes (Always Remembered)</span>
       <textarea id="world-notes-input" rows="3" placeholder="World rules, locations, ongoing facts…" spellcheck="false"></textarea>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Quick Prompt Templates</span>
+      <div class="prompt-library" id="prompt-library">
+        <div class="prompt-library-head">
+          <h3>Saved Prompts</h3>
+          <button type="button" class="mini-btn" id="prompt-add-btn" aria-label="Add new prompt">
+            +
+          </button>
+        </div>
+        <div class="prompt-library-list" id="prompt-list">
+          <!-- Prompts will be injected here -->
+        </div>
+      </div>
     </label>
 
     <label class="field">
@@ -123,6 +185,13 @@
   <aside class="chats-panel" id="chats-panel" aria-label="Chat history" aria-hidden="true">
     <div class="chats-head">
       <h2>Chats</h2>
+      <div class="chat-search">
+        <input type="text" id="chat-search" placeholder="Search chats…" />
+        <select id="tag-filter">
+          <option value="">All chats</option>
+          <!-- Options will be populated by JavaScript -->
+        </select>
+      </div>
       <button type="button" class="icon-btn" id="chats-close" aria-label="Close chat history">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
       </button>
@@ -131,6 +200,7 @@
     <div class="chat-list" id="chat-list"></div>
     <div class="chats-foot">
       <button type="button" class="btn" id="export-btn">Export backup</button>
+      <button type="button" class="btn" id="export-current-btn">Export current chat</button>
       <button type="button" class="btn" id="import-btn">Import</button>
       <input type="file" id="import-file" accept="application/json,.json" hidden />
     </div>

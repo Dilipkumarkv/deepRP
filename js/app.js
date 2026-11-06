@@ -55,6 +55,15 @@ const els = {
   exportBtn: $("export-btn"),
   importBtn: $("import-btn"),
   importFile: $("import-file"),
+  contextVisualizer: $("context-visualizer"),
+  contextCurrent: $("context-current"),
+  contextProgress: $("context-progress"),
+  tempInput: $("temp-input"),
+  toppInput: $("topp-input"),
+  maxtokensInput: $("maxtokens-input"),
+  promptLibrary: $("prompt-library"),
+  promptList: $("prompt-list"),
+  promptAddBtn: $("prompt-add-btn"),
 };
 
 /* ---------- constants ---------- */
@@ -66,6 +75,9 @@ const LS_KEYS = {
   contextCount: "stheno_context_count",
   worldNotes: "stheno_world_notes",
   theme: "stheno_theme",
+  temperature: "stheno_temperature",
+  topP: "stheno_top_p",
+  maxTokens: "stheno_max_tokens",
 };
 
 const DEFAULT_SPACE = "deepstrike87/RPO";
@@ -94,6 +106,9 @@ const settings = {
   persona: localStorage.getItem(LS_KEYS.persona) || DEFAULT_PERSONA,
   contextCount: Number(localStorage.getItem(LS_KEYS.contextCount) ?? 20),
   worldNotes: localStorage.getItem(LS_KEYS.worldNotes) || "",
+  temperature: Number(localStorage.getItem(LS_KEYS.temperature) ?? 0.7),
+  topP: Number(localStorage.getItem(LS_KEYS.topP) ?? 0.9),
+  maxTokens: Number(localStorage.getItem(LS_KEYS.maxTokens) ?? 512),
 };
 
 const chatState = loadChats();
@@ -143,10 +158,86 @@ function scrollToBottom() {
   });
 }
 
-function renderMessage(role, text, { error = false } = {}) {
+function renderMessage(role, text, { error = false, actions = false } = {}) {
   const el = document.createElement("div");
   el.className = `msg msg-${role}${error ? " error" : ""}`;
   el.textContent = text;
+  if (actions) {
+    const actionsEl = document.createElement("div");
+    actionsEl.className = "msg-actions";
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "mini-btn";
+    copyBtn.setAttribute("aria-label", "Copy message");
+    copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 16l4-4m0 0l4 4m-4-4l-4 4"/></svg>';
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(text).then(() => {
+        addSystemMessage("Message copied to clipboard.");
+      }).catch(() => {
+        addSystemMessage("Failed to copy message.", true);
+      });
+    });
+    const regenBtn = document.createElement("button");
+    regenBtn.type = "button";
+    regenBtn.className = "mini-btn";
+    regenBtn.setAttribute("aria-label", "Regenerate response");
+    regenBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14l2-2l4.5 4.5"/></svg>';
+    regenBtn.addEventListener("click", () => {
+      // Could trigger a regenerate - for now just notify
+      addSystemMessage("Regenerate not yet implemented - long-press the bot message.");
+    });
+    const thumbsUp = document.createElement("button");
+    thumbsUp.type = "button";
+    thumbsUp.className = "mini-btn thumb-btn";
+    thumbsUp.setAttribute("aria-label", "Thumbs up");
+    thumbsUp.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08l-1.44 1.44a1.5 1.5 0 0 1-2.12 0L12 14.31a1.5 1.5 0 0 1-2.12 0L2.06 9.35a1.5 1.5 0 0 1 0-2.12l1.44-1.44a1.5 1.5 0 0 1 2.12 0z"/><polyline points="22 2 12 22 2 12"/></svg>';
+    thumbsUp.addEventListener("click", () => {
+      toggleFeedback(el, "up");
+    });
+    const thumbsDown = document.createElement("button");
+    thumbsDown.type = "button";
+    thumbsDown.className = "mini-btn thumb-btn";
+    thumbsDown.setAttribute("aria-label", "Thumbs down");
+    thumbsDown.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><polyline points="14 8 10 12 6 14"/></svg>';
+    thumbsDown.addEventListener("click", () => {
+      toggleFeedback(el, "down");
+    });
+    actionsEl.append(thumbsUp, thumbsDown);
+    // Add copy, regen, and delete buttons too
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "mini-btn";
+    copyBtn.setAttribute("aria-label", "Copy message");
+    copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 16l4-4m0 0l4 4m-4-4l-4 4"/></svg>';
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(text).then(() => {
+        addSystemMessage("Message copied to clipboard.");
+      }).catch(() => {
+        addSystemMessage("Failed to copy message.", true);
+      });
+    });
+    const regenBtn = document.createElement("button");
+    regenBtn.type = "button";
+    regenBtn.className = "mini-btn";
+    regenBtn.setAttribute("aria-label", "Regenerate response");
+    regenBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14l2-2l4.5 4.5"/></svg>';
+    regenBtn.addEventListener("click", () => {
+      addSystemMessage("Regenerate not yet implemented.");
+    });
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "mini-btn danger";
+    deleteBtn.setAttribute("aria-label", "Delete message");
+    deleteBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (confirm(`Delete this "${role === "bot" ? "bot" : "user"} message?"`)) {
+        addSystemMessage("Message deletion coming in a future update.");
+      }
+    });
+    actionsEl.append(copyBtn, regenBtn, deleteBtn, thumbsUp, thumbsDown);
+    el.appendChild(actionsEl);
+  }
   els.chat.appendChild(el);
   scrollToBottom();
   return el;
@@ -166,14 +257,89 @@ function renderActiveChat() {
   } else if (!chat.messages.length) {
     addSystemMessage("New chat — set the scene with your first message.");
   } else {
-    for (const m of chat.messages) renderMessage(m.role, m.text);
+    for (const m of chat.messages) renderMessage(m.role, m.text, { actions: m.role === "bot" });
+  }
+  // Show memory summary hint if chat is long and has no summary
+  const chat = activeChat(chatState);
+  if (chat && chat.messages.length >= 30 && !chat.memorySummary.trim()) {
+    const hint = document.createElement("div");
+    hint.className = "msg-system";
+    hint.textContent = "Tip: This chat has many messages. Use the Summarize button in Settings to create a memory summary.";
+    els.chat.appendChild(hint);
   }
   scrollToBottom();
+  updateContextVisualizer();
+}
+
+function updateContextVisualizer() {
+  const chat = activeChat(chatState);
+  if (!chat || !settings.token) {
+    els.contextVisualizer.hidden = true;
+    return;
+  }
+  els.contextVisualizer.hidden = false;
+  // Count recent message characters (same logic as buildMessagePayload)
+  const count = Math.max(0, Math.min(50, Number(settings.contextCount) || 0));
+  const recent = chat.messages.slice(-count);
+  let transcript = recent.map((m) => `${m.role === "user" ? "User" : "Stheno"}: ${m.text}`).join("\n\n");
+  let used = transcript.length;
+  const total = MAX_TRANSCRIPT_CHARS;
+  const percent = Math.round((used / total) * 100);
+  els.contextCurrent.textContent = `${used} / ${total} chars (${percent}%)`;
+  // Add warning classes
+  els.contextVisualizer.classList.remove("warn", "danger");
+  if (percent >= 80) {
+    els.contextVisualizer.classList.add("warn");
+  }
+  if (percent >= 95) {
+    els.contextVisualizer.classList.add("danger");
+  }
+}
+
+
+
+function toggleFeedback(messageEl, direction) {
+  // Find the thumbs up/down buttons in this message element
+  const thumbBtns = messageEl.querySelectorAll('.thumb-btn');
+  const isUp = direction === 'up';
+  
+  thumbBtns.forEach((btn) => {
+    btn.disabled = true;
+    if (isUp) {
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08l-1.44 1.44a1.5 1.5 0 0 1-2.12 0L12 14.31a1.5 1.5 0 0 1-2.12 0L2.06 9.35a1.5 1.5 0 0 1 0-2.12l1.44-1.44a1.5 1.5 0 0 1 2.12 0z"/><polyline points="22 2 12 22 2 12"/></svg>';
+      btn.style.color = '#16a34a';
+      btn.style.background = 'var(--ok-soft)';
+    } else {
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><polyline points="14 8 10 12 6 14"/></svg>';
+      btn.style.color = '#ef4444';
+      btn.style.background = 'var(--danger-soft)';
+    }
+  });
+  
+  // Store feedback in localStorage
+  const chat = activeChat(chatState);
+  if (chat && settings.token) {
+    const feedbackKey = "stheno_feedback_" + chat.id;
+    const existing = JSON.parse(localStorage.getItem(feedbackKey) || '{}');
+    existing[messageEl.textContent] = direction;
+    localStorage.setItem(feedbackKey, JSON.stringify(existing));
+  }
+  
+  // Show temporary feedback
+  addSystemMessage('Feedback recorded: ' + (direction === 'up' ? 'up' : 'down'));
+  
+  // Re-enable after a brief delay
+  setTimeout(() => {
+    thumbBtns.forEach((btn) => {
+      btn.disabled = false;
+    });
+  }, 1000);
 }
 
 function storeMessage(chat, role, text) {
   addChatMessage(chatState, chat, role, text);
   refreshChatList();
+  updateContextVisualizer();
 }
 
 function showTyping() {
@@ -254,19 +420,41 @@ function describeError(err) {
   return `Error: ${raw}`;
 }
 
-async function predictReply(message, systemPrompt) {
+async function predictReply(message, systemPrompt, temperature, topP, maxTokens) {
   const c = await ensureClient();
   if (!c) throw new Error("No Hugging Face token set.");
-  const result = await withTimeout(
-    c.predict(ENDPOINT, [message, systemPrompt]),
-    REQUEST_TIMEOUT_MS,
-    "Request timed out"
-  );
-  const reply = Array.isArray(result?.data) ? result.data[0] : null;
-  if (typeof reply !== "string" || !reply.trim()) {
-    throw new Error("The model returned an empty reply — try again.");
+
+  let attempt = 0;
+  const maxAttempts = 3;
+  const baseDelay = 1000; // 1 second
+
+  while (attempt < maxAttempts) {
+    try {
+      const result = await withTimeout(
+        c.predict(ENDPOINT, [message, systemPrompt]),
+        REQUEST_TIMEOUT_MS,
+        "Request timed out"
+      );
+      const reply = Array.isArray(result?.data) ? result.data[0] : null;
+      if (typeof reply !== "string" || !reply.trim()) {
+        throw new Error("The model returned an empty reply — try again.");
+      }
+      return reply;
+    } catch (err) {
+      attempt++;
+      if (attempt >= maxAttempts) {
+        throw err; // Re-throw the last error
+      }
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      // If it's a network error, reset the client connection
+      if (/network|fetch|connection|abort/i.test(err.message || err)) {
+        client = null;
+        connectedSpace = null;
+      }
+    }
   }
-  return reply;
 }
 
 /* ---------- sending ---------- */
@@ -285,6 +473,9 @@ async function sendMessage() {
   // Payload is built before storing the new message so it isn't duplicated in the transcript
   const payload = buildMessagePayload(chat, text, settings.contextCount);
   const systemPrompt = buildSystemPrompt(settings.persona, settings.worldNotes, chat);
+  const temperature = settings.temperature;
+  const topP = settings.topP;
+  const maxTokens = settings.maxTokens;
 
   storeMessage(chat, "user", text);
   renderMessage("user", text);
@@ -297,10 +488,10 @@ async function sendMessage() {
   showTyping();
 
   try {
-    const reply = await predictReply(payload, systemPrompt);
+    const reply = await predictReply(payload, systemPrompt, temperature, topP, maxTokens);
     hideTyping();
     storeMessage(chat, "bot", reply);
-    if (chatState.activeId === chat.id) renderMessage("bot", reply);
+    if (chatState.activeId === chat.id) renderMessage("bot", reply, { actions: true });
     setStatus("ready", "Ready");
   } catch (err) {
     hideTyping();
@@ -407,22 +598,33 @@ const ICONS = {
 
 function refreshChatList() {
   els.chatList.innerHTML = "";
-  if (!chatState.chats.length) {
+  const searchTerm = els.searchInput ? (els.searchInput.value || "").toLowerCase() : "";
+  const tagFilter = els.tagFilter ? (els.tagFilter.value || "") : "";
+  const filteredChats = tagFilter
+    ? filterChatsByTag(chatState, tagFilter)
+    : chatState.chats;
+  const selectedChats = bulkGetSelected(chatState);
+  if (!filteredChats.length) {
     const empty = document.createElement("p");
     empty.className = "chat-list-empty";
-    empty.textContent = "No chats yet — start a new one.";
+    empty.textContent = searchTerm
+      ? `No chats match “${els.searchInput?.value || ""}” with tag “${tagFilter || "all"}”.`
+      : "No chats yet — start a new one.";
     els.chatList.appendChild(empty);
     return;
   }
-  for (const chat of chatState.chats) {
+  for (const chat of filteredChats) {
+    const isSelected = selectedChats.some((c) => c.id === chat.id);
     const item = document.createElement("div");
-    item.className = `chat-item${chat.id === chatState.activeId ? " active" : ""}`;
+    item.className = `chat-item${chat.id === chatState.activeId ? " active" : ""}${isSelected ? " selected" : ""}`;
 
     const main = document.createElement("button");
     main.type = "button";
     main.className = "chat-item-main";
     const title = document.createElement("span");
     title.className = "chat-item-title";
+    // Apply strikethrough for selected chats
+    if (isSelected) title.style.textDecoration = "line-through";
     title.textContent = chat.title;
     const meta = document.createElement("span");
     meta.className = "chat-item-meta";
@@ -434,6 +636,19 @@ function refreshChatList() {
       dot.title = "Has story memory";
       meta.appendChild(dot);
     }
+    // Add tag badges
+    if (chat.tags && chat.tags.length) {
+      const tagsSpan = document.createElement("span");
+      tagsSpan.className = "chat-item-tags";
+      for (const tag of chat.tags) {
+        const tagBtn = document.createElement("span");
+        tagBtn.className = "tag-badge";
+        tagBtn.textContent = `#${tag}`;
+        tagBtn.title = tag;
+        tagsSpan.appendChild(tagBtn);
+      }
+      meta.appendChild(tagsSpan);
+    }
     main.append(title, meta);
     main.addEventListener("click", () => {
       selectChat(chatState, chat.id);
@@ -444,6 +659,20 @@ function refreshChatList() {
 
     const actions = document.createElement("div");
     actions.className = "chat-item-actions";
+
+    // Bulk select toggle for bulk mode
+    if (selectedChats.length > 0 || chat._selected) {
+      const selectToggle = document.createElement("button");
+      selectToggle.type = "button";
+      selectToggle.className = "mini-btn";
+      selectToggle.setAttribute("aria-label", "Deselect chat");
+      selectToggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M33 11l-1 6L18 21l-5-5L14 4l8.58 8.58a5 5 0 0 1-7.07 7.07l-0.07 0.07"/><path d="M5 18h14"/><path d="M13 11l7 7L27 3"/><path d="M11 5l7 7L27 3"/></svg>';
+      selectToggle.addEventListener("click", () => {
+        bulkDeselectAll(chatState);
+        refreshChatList();
+      });
+      actions.append(selectToggle);
+    }
 
     const renameBtn = document.createElement("button");
     renameBtn.type = "button";
@@ -469,6 +698,21 @@ function refreshChatList() {
       renderActiveChat();
       refreshChatList();
     });
+
+    // Bulk operation buttons shown when in bulk mode
+    if (selectedChats.length > 0 || chat._selected) {
+      const bulkDeleteBtn = document.createElement("button");
+      bulkDeleteBtn.type = "button";
+      bulkDeleteBtn.className = "mini-btn danger";
+      bulkDeleteBtn.setAttribute("aria-label", "Delete selected chats");
+      bulkDeleteBtn.textContent = `${selectedChats.length > 1 ? `${selectedChats.length} chats` : "1 chat"} delete`;
+      bulkDeleteBtn.addEventListener("click", () => {
+        bulkDeleteSelected(chatState);
+        renderActiveChat();
+        refreshChatList();
+      });
+      actions.append(bulkDeleteBtn);
+    }
 
     actions.append(renameBtn, deleteBtn);
     item.append(main, actions);
@@ -496,6 +740,24 @@ els.exportBtn.addEventListener("click", () => {
   a.download = `stheno-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+});
+
+els.exportCurrentBtn.addEventListener("click", () => {
+  const chat = activeChat(chatState);
+  if (!chat) {
+    addSystemMessage("No active chat to export.", true);
+    return;
+  }
+  const data = exportCurrentChat(chatState);
+  if (!data) return;
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `stheno-export-${chat.title || "chat"}-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  addSystemMessage(`Exported chat “${chat.title || "untitled"}".`);
 });
 
 els.importBtn.addEventListener("click", () => els.importFile.click());
@@ -540,6 +802,9 @@ function syncSettingsForm() {
   els.personaInput.value = settings.persona;
   els.contextInput.value = settings.contextCount;
   els.worldNotesInput.value = settings.worldNotes;
+  els.tempInput.value = settings.temperature;
+  els.toppInput.value = settings.topP;
+  els.maxtokensInput.value = settings.maxTokens;
   els.chatMemoryInput.value = activeChat(chatState)?.memorySummary || "";
 }
 
@@ -552,12 +817,18 @@ function applySettings() {
   settings.persona = els.personaInput.value;
   settings.contextCount = Math.max(0, Math.min(50, Number(els.contextInput.value) || 0));
   settings.worldNotes = els.worldNotesInput.value;
+  settings.temperature = Math.max(0.1, Math.min(2, Number(els.tempInput.value) || 0.7));
+  settings.topP = Math.max(0.1, Math.min(1, Number(els.toppInput.value) || 0.9));
+  settings.maxTokens = Math.max(1, Math.min(4096, Number(els.maxtokensInput.value) || 512));
 
   localStorage.setItem(LS_KEYS.token, settings.token);
+  updateContextVisualizer();
   localStorage.setItem(LS_KEYS.space, settings.space);
   localStorage.setItem(LS_KEYS.persona, settings.persona);
   localStorage.setItem(LS_KEYS.contextCount, String(settings.contextCount));
-  localStorage.setItem(LS_KEYS.worldNotes, settings.worldNotes);
+  localStorage.setItem(LS_KEYS.temperature, String(settings.temperature));
+  localStorage.setItem(LS_KEYS.topP, String(settings.topP));
+  localStorage.setItem(LS_KEYS.maxTokens, String(settings.maxTokens));
 
   const chat = activeChat(chatState);
   if (chat) setChatMemory(chatState, chat, els.chatMemoryInput.value);
@@ -596,6 +867,25 @@ els.tokenToggle.addEventListener("click", () => {
   els.eyeClosed.hidden = !show;
   els.tokenToggle.setAttribute("aria-pressed", String(show));
   els.tokenInput.focus();
+  // Show brief warning when revealing sensitive text
+  if (show) {
+    const existingWarning = els.tokenToggle.dataset.revealedWarning;
+    if (!existingWarning) {
+      const warn = document.createElement("span");
+      warn.className = "token-warning";
+      warn.textContent = " — input revealed (keep screen clean)";
+      warn.style.fontSize = "10px";
+      warn.style.marginLeft = "6px";
+      warn.style.color = "#a81f3c";
+      els.tokenToggle.appendChild(warn);
+      els.tokenToggle.dataset.revealedWarning = "1";
+      // Auto-remove after 3 seconds
+      setTimeout(() => {
+        if (warn.parentNode) warn.parentNode.removeChild(warn);
+        els.tokenToggle.dataset.revealedWarning = "";
+      }, 3000);
+    }
+  }
 });
 
 els.clearChatBtn.addEventListener("click", () => {
@@ -618,6 +908,7 @@ function init() {
   syncSettingsForm();
   renderActiveChat();
   refreshChatList();
+  updateContextVisualizer();
   updateSendButton();
 
   if (settings.token) {
@@ -626,7 +917,10 @@ function init() {
     setStatus("disconnected", "Token required");
     if (!chatState.chats.length) openSettings();
   }
-
+  // Populate tag filter
+  populateTagFilter();
+  setupChatSearch();
+  if ("serviceWorker" in navigator) {
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker
@@ -636,4 +930,199 @@ function init() {
   }
 }
 
+
+
+/* ---------- mobile enhancements ---------- */
+
+// Shake to summarize (mobile Easter egg)
+let shakeTimeout = null;
+let shakeCount = 0;
+
+window.addEventListener('devicemotion', (event) => {
+  if (!settings.token || generating) return;
+  
+  const acceleration = event.accelerationIncludingGravity;
+  if (!acceleration) return;
+  
+  const threshold = 15;
+  const currentTime = Date.now();
+  
+  if (shakeTimeout) {
+    if (currentTime - shakeTimeout < 800) {
+      shakeCount++;
+      if (shakeCount >= 3) {
+        shakeCount = 0;
+        shakeTimeout = null;
+        // Trigger summarize if in settings
+        if (els.panel.classList.contains('open')) {
+          summarizeChatMemory();
+        } else {
+          addSystemMessage('Shake detected! Open Settings and tap Summarize to capture memory.');
+        }
+      }
+    } else {
+      shakeTimeout = currentTime;
+      shakeCount = 1;
+    }
+  } else {
+    shakeTimeout = currentTime;
+    shakeCount = 1;
+  }
+}, { passive: true });
+
+// Improve textarea height adjustment for mobile
+function resizeInput() {
+  els.input.style.height = 'auto';
+  const height = Math.min(els.input.scrollHeight, 200);
+  els.input.style.height = height + 'px';
+  els.input.style.overflowY = els.input.scrollHeight > 200 ? 'auto' : 'hidden';
+}
+
+// Focus management on mobile
+els.input.addEventListener('focus', () => {
+  // Small delay to ensure keyboard is shown
+  setTimeout(() => {
+    els.chat.scrollTop = els.chat.scrollHeight;
+  }, 100);
+});
+
+// Remove default drag on images within the chat
+els.chat.addEventListener('dragstart', (e) => {
+  const tag = e.target.tagName.toLowerCase();
+  if (tag === 'img' || tag === 'svg') {
+    e.preventDefault();
+  }
+});
 init();
+
+/* ---------- quick prompt library ---------- */
+
+const LS_KEYS_QUICK_PROMPT = "stheno_quick_prompts";
+
+const quickPrompts = (() => {
+  try {
+    const raw = localStorage.getItem(LS_KEYS_QUICK_PROMPT);
+    const prompts = raw ? JSON.parse(raw) : [];
+    return Array.isArray(prompts) ? prompts : [];
+  } catch {
+    return [];
+  }
+})();
+
+function saveQuickPrompts() {
+  try {
+    localStorage.setItem(LS_KEYS_QUICK_PROMPT, JSON.stringify(quickPrompts));
+  } catch {
+    // storage unavailable — prompts simply won't persist
+  }
+}
+
+function renderPromptList() {
+  els.promptList.innerHTML = "";
+  if (!quickPrompts.length) {
+    const empty = document.createElement("p");
+    empty.className = "chat-list-empty";
+    empty.textContent = "No saved prompts yet — add one below.";
+    els.promptList.appendChild(empty);
+    return;
+  }
+  for (const prompt of quickPrompts) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "prompt-btn";
+    btn.textContent = prompt.length > 30 ? `${prompt.slice(0, 30)}…` : prompt;
+    btn.addEventListener("click", () => insertPrompt(prompt));
+    els.promptList.appendChild(btn);
+  }
+}
+
+function insertPrompt(text) {
+  els.input.value += text + " ";
+  resizeInput();
+  updateSendButton();
+  els.input.focus();
+}
+
+els.promptAddBtn.addEventListener("click", () => {
+  const name = prompt("Enter a name for this prompt template:", "");
+  if (name === null) return;
+  const text = prompt("Enter the prompt text:", "") || "";
+  if (text.trim()) {
+    quickPrompts.push({ name: name.trim(), text: text.trim() });
+    saveQuickPrompts();
+    renderPromptList();
+  }
+});
+
+// Initialize
+renderPromptList();
+
+
+/* ---------- persona presets ---------- */
+
+const LS_KEYS_PERSONA_PRESETS = 'stheno_persona_presets';
+
+const personaPresets = (() => {
+  try {
+    const raw = localStorage.getItem(LS_KEYS_PERSONA_PRESETS);
+    const presets = raw ? JSON.parse(raw) : [];
+    return Array.isArray(presets) ? presets : [];
+  } catch {
+    return [];
+  }
+})();
+
+function savePersonaPresets() {
+  try {
+    localStorage.setItem(LS_KEYS_PERSONA_PRESETS, JSON.stringify(personaPresets));
+  } catch {
+    // storage unavailable — presets simply won't persist
+  }
+}
+
+function renderPresetList() {
+  els.presetList.innerHTML = '';
+  if (!personaPresets.length) {
+    const empty = document.createElement('p');
+    empty.className = 'chat-list-empty';
+    empty.textContent = 'No saved presets yet — add one below.';
+    els.presetList.appendChild(empty);
+    return;
+  }
+  for (const preset of personaPresets) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'preset-btn' + (preset.isActive ? ' active' : '');
+    btn.textContent = preset.name.length > 20 ? preset.name.slice(0, 20) + '…' : preset.name;
+    btn.addEventListener('click', () => applyPreset(preset.name));
+    els.presetList.appendChild(btn);
+  }
+}
+
+function applyPreset(name) {
+  const preset = personaPresets.find((p) => p.name === name);
+  if (!preset) return;
+  // Set the persona input to the preset's system prompt
+  els.personaInput.value = preset.systemPrompt;
+  // Update settings
+  settings.persona = preset.systemPrompt;
+  // Save to localStorage
+  localStorage.setItem(LS_KEYS.persona, settings.persona);
+  // Close presets and refresh
+  closeSettings();
+  addSystemMessage('Applied preset: ' + name);
+}
+
+els.presetAddBtn.addEventListener('click', () => {
+  const name = prompt('Enter a name for this persona preset:', '');
+  if (name === null) return;
+  const systemPrompt = prompt('Enter the system prompt text:', '') || '';
+  if (systemPrompt.trim()) {
+    personaPresets.push({ name: name.trim(), systemPrompt: systemPrompt.trim(), isActive: false });
+    savePersonaPresets();
+    renderPresetList();
+  }
+});
+
+// Initialize
+renderPresetList();
